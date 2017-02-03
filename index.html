@@ -1,0 +1,174 @@
+﻿<!DOCTYPE html>
+<html ng-app="app">
+<head>
+  <title>Firebase App</title>
+  <!-- Jquery -->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.8.1/jquery.min.js"></script>
+  <!-- Angular -->
+  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.6.1/angular.min.js"></script>
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/3.6.4/firebase.js"></script>
+  <!-- AngularFire -->
+  <script src="https://cdn.firebase.com/libs/angularfire/2.2.0/angularfire.min.js"></script>
+</head>
+
+<body style="width:70%; margin:auto">
+    <h1>Firebase chatbox</h1>
+
+    <div ng-controller="chatCtrl">
+        <div><span>Thông báo </span><b>{{thongbao}}</b></div>
+        <br>
+        <div ng-click="xemtinnhan()" id="chatBox" style="padding: 10px; border: black 1px solid; height: 450px;overflow-y: scroll;">
+            <h1>Chat box</h1>
+            <!-- Đồng bộ từ array chatMessage sang HTML.
+            Hàm limit To để lấy 15 messages cuối cùng -->
+            <!-- <div ng-repeat="chatMessage in chatMessages | limitTo:-10"> -->
+            <div ng-repeat="chatMessage in chatMessages">
+                  <span style="font-weight: bold;font-size:20px">{{chatMessage.name}}</span> :
+                  <span style="font-size:20px">{{chatMessage.message}}</spanstyle>
+
+                <div style="text-align:right;float:right;font-size:14px">
+                  <label>{{chatMessage.time}}</label>
+                  <span ng-if="chatMessage.seen == 1">Đã đọc</span>
+                  <span ng-if="chatMessage.seen == 0">Chưa đọc</span>
+                </div>
+                <hr>
+            </div>
+            <span id="dich"></span>
+        </div>
+
+        <form> <pre> Name: {{name}}</pre>
+        <!-- Khi người dùng bấm enter, ta gọi hàm sendChat trong controller,
+            thực hiện đồng bộ, hiển thị tin nhắn trên máy những người dùng khác -->
+         Chat: <input type="text" ng-model="chatMes" />
+               <button type="submit" ng-click="sendChat()">Send</button>
+         </form>
+ </div>
+</body>
+</html>
+<script>
+  // Initialize Firebase
+  var config = {//config ở trong project đăng ký tại firebase
+    apiKey: "AIzaSyA5vVUD78rwuiLHjudBe3rBNMuD3RXIcA8",
+    authDomain: "realtimeedmohou.firebaseapp.com",
+    databaseURL: "https://realtimeedmohou.firebaseio.com",
+    storageBucket: "realtimeedmohou.appspot.com",
+    messagingSenderId: "808410714072"
+  };
+
+	function getnow()//lấy thời gian hiện tại
+	{
+		var d = new Date();
+		return ("00" + (d.getMonth() + 1)).slice(-2) + "/" +("00" + d.getDate()).slice(-2) + "/" + d.getFullYear() + " " + ("00" + d.getHours()).slice(-2) + ":" + ("00" + d.getMinutes()).slice(-2) + ":" + ("00" + d.getSeconds()).slice(-2);
+	}
+
+  function scrolldown()
+  {
+    $('#chatBox').animate({
+        scrollTop: $('#dich').offset().top
+    }, 'slow');
+  }
+
+  function Sound(source,volume,loop)
+  {
+      this.source=source;
+      this.volume=volume;
+      this.loop=loop;
+      var son;
+      this.son=son;
+      this.finish=false;
+      this.stop=function()
+      {
+          document.body.removeChild(this.son);
+      }
+      this.start=function()
+      {
+          if(this.finish)return false;
+          this.son=document.createElement("embed");
+          this.son.setAttribute("src",this.source);
+          this.son.setAttribute("hidden","true");
+          this.son.setAttribute("volume",this.volume);
+          this.son.setAttribute("autostart","true");
+          this.son.setAttribute("loop",this.loop);
+          document.body.appendChild(this.son);
+      }
+      this.remove=function()
+      {
+          document.body.removeChild(this.son);
+          this.finish=true;
+      }
+      this.init=function(volume,loop)
+      {
+          this.finish=false;
+          this.volume=volume;
+          this.loop=loop;
+      }
+  }
+
+	var app = angular.module('app', ['firebase']);
+	app.controller('chatCtrl', ['$scope', '$firebaseArray', function($scope, $firebaseArray)
+		{
+			var kenhchat = prompt("Enter your groupchat: ", '');
+			var name = prompt("Enter your name: ", '');
+			$scope.name = name; //Lấy tên của người dùng
+			$scope.chatMessage = ""; //Tẩy trắng khung text
+			$scope.time = getnow();//Lấy thòi gian hiện tại
+      $scope.thongbao = 0;//Thông báo
+
+      var ref = firebase.initializeApp(config);//khởi tạo app
+      var rootref = ref.database().ref(kenhchat);//nhánh abc của database
+			$scope.chatMessages = $firebaseArray(rootref);//cập nhật mảng trả về từ firebase cho vào mảng hiện ra
+
+      rootref.on('child_added', function(snapshot) {//khi thêm 1 dữ liệu mới được thêm
+        var key = snapshot.key;
+        var childData = snapshot.val();
+        if(childData.seen == 0 && childData.name != name)
+        {
+          var soundmess=new Sound("mess.mp3",100,true);
+          soundmess.start();//chuông
+          $scope.thongbao = 1;
+        }
+      });
+	  
+		$scope.sendChat = function()
+		{
+			var chatMessage =
+			{
+				name: name,
+				message: $scope.chatMes,
+				time: getnow(),
+	  seen: 0
+			};
+			$scope.chatMessages.$add(chatMessage); //Thêm 1 tin nhắn vào array
+			$scope.chatMes = "";
+		}
+
+      $scope.xemtinnhan = function()
+      {//khi ấn vào ô xem tin nhắn update tất cả seen về 1
+        rootref.once("value").then(function(snapshot) {
+            var keychuadoc = [];
+            snapshot.forEach(function(childSnapshot) {//get danh sách
+                var key = childSnapshot.key;
+                var childData = childSnapshot.val();
+                if(childData.seen == 0 && childData.name != name)
+                {
+                  keychuadoc.splice(0, 0, key);
+                }
+            });//end Each
+            for(var i = 0;i<keychuadoc.length;i++)
+            {
+              rootref.child(keychuadoc[i]).update({seen: 1});
+              $scope.thongbao = 0;
+            }
+        });//end once
+      }//end function
+		}
+	]);
+
+  $(document).ready(function(){
+    setTimeout(function(){
+      scrolldown()
+    }, 1500);
+  })
+
+</script>
