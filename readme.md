@@ -1,1 +1,3 @@
-run html in browser and enjoin :)
+## Installation
+
+run html in browser
